@@ -1,76 +1,117 @@
-# ARC — Adaptive Resource Contract Engine
+# ARC: Adaptive Resource Contract Engine
 
-**Event-driven OS policy engine for Linux / macOS / Windows (WSL)**
-Operating Systems course project (BCSE303L) — School of Computer Science,
+An event-driven, user-space policy engine for Linux, WSL, macOS and Windows.
+ARC monitors runtime system conditions and maintains user-defined resource
+contracts: when a condition holds, resource actions are enforced; when it
+stops holding, the previous state is restored automatically.
+
+Operating Systems course project (BCSE303L), School of Computer Science,
 Engineering and Information Systems.
-
-ARC monitors runtime system conditions (CPU, memory, process activity, battery)
-and dynamically enforces **user-defined resource contracts**:
-
-```
-trigger condition  ->  resource actions  ->  automatic restoration
-```
-
-Instead of manually re-configuring priorities and affinities as the workload
-changes, you declare *intent* once and ARC follows the workload's lifecycle.
 
 ---
 
-## Quick start
+## Overview
 
-**macOS / any PEP 668 Python (Homebrew, etc.) — use a virtual environment:**
+Modern operating systems expose fine-grained resource controls — scheduling
+priorities (`nice`, `renice`), CPU affinity (`sched_setaffinity`), control
+groups, and process control — but they do not coordinate them. Deciding *when*
+to apply a change, *which* processes it should affect, and *when* to undo it is
+left to administrators and one-off scripts.
+
+ARC adds a policy layer above these mechanisms. A **resource contract** is a
+standing declaration of intent with three parts: a trigger condition, one or
+more resource-management actions, and a restoration rule. The user writes the
+contract once; the engine evaluates it continuously against live system state
+and closes the loop on its own.
+
+```
+        runtime system state
+                |
+           [ monitor ]        samples CPU, memory, process activity, battery
+                |
+          [ detector ]        trigger conditions tested every tick
+                |
+        [ contract engine ]   IDLE -> PENDING -> ACTIVE -> RESTORING
+                |
+         [ executor ]         nice / affinity / suspend / cgroup limits
+                |
+        resource state -------> back to monitoring
+                |
+        [ execution log ]     every decision recorded and auditable
+```
+
+Compared with existing approaches, the distinction is who participates in the
+loop:
+
+| | Manual commands | Rule tools (Ananicy, oomd, TuneD) | ARC |
+|---|---|---|---|
+| Watches live system state | user | partial / single-purpose | engine, continuously |
+| Trigger conditions | none | app identity or one metric | processes, metrics, battery |
+| Target selection | typed PIDs | fixed rules | resolved from live state |
+| Automatic restoration | none | none | exact, PID-safe |
+| Closed policy loop | no | no | yes |
+
+---
+
+## Installation
+
+Requirements: Python 3.10 or newer.
 
 ```bash
+git clone https://github.com/gagankishoreint-glitch/Arc2.0.git
 cd Arc2.0
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt pytest
 ```
 
-Linux: `pip install -r requirements.txt` works directly.
-
-```bash
-python3 -m arc status                                   # platform capability report
-python3 -m arc validate contracts/examples/full_suite.yaml
-python3 -m arc demo                                     # guided demo - works on ALL platforms
-python3 -m arc selftest                                 # end-to-end smoke test (safe)
-python3 -m pytest tests/ -q                             # 36 tests
-
-# LIVE VISUAL DEMO CENTERPIECE - terminal UI, works over projector/SSH
-python3 -m arc dashboard --contracts contracts/examples/full_suite.yaml
-python3 demo/generate_load.py 15   # in a second terminal - watch contracts fire
-
-# browser alternative (same engine, web UI on http://localhost:8777)
-python3 -m arc web --contracts contracts/examples/full_suite.yaml
-
-bash demo/run_demo.sh             # scripted demo (POSIX shells only)
-
-# live enforcement (WSL/macOS/Ubuntu; use sudo for the full privilege tier)
-sudo python3 -m arc run --contracts contracts/examples/full_suite.yaml --interval 1
-
-# deterministic scenario replay on any OS (add --real-actions to really enforce)
-python3 -m arc simulate --contracts contracts/examples/full_suite.yaml \
-         --scenario demo/scenario_compile_battery.json --speed 3
-```
-
-Run the tests: `python3 -m pytest tests/` (36 tests).
-Re-run the experiments: `sudo python3 experiments/run_experiments.py`.
-Per-platform demo scripts: see **DEMO_GUIDE.md** (WSL / macOS / Windows / Ubuntu).
+A virtual environment is required on macOS (Homebrew Python is
+externally-managed) and recommended everywhere.
 
 ---
 
-## Contract model
+## Running ARC
 
-Contracts are plain YAML — no code changes needed to define policy:
+| Command | Purpose |
+|---|---|
+| `python3 -m arc status` | Platform capability report |
+| `python3 -m arc validate <file>` | Validate a contract file |
+| `python3 -m arc run --contracts <file>` | Enforce contracts on the live system |
+| `python3 -m arc dashboard --contracts <file>` | Terminal UI: engine plus live visualisation |
+| `python3 -m arc web --contracts <file>` | Browser UI on http://localhost:8777 |
+| `python3 -m arc simulate --scenario <json>` | Deterministic scenario replay (no privileges) |
+| `python3 -m arc demo` | Guided demonstration, identical on all platforms |
+| `python3 -m arc selftest` | Built-in end-to-end smoke test |
+
+A first session typically looks like this:
+
+```bash
+python3 -m arc status                                    # what this machine supports
+python3 -m arc validate contracts/examples/full_suite.yaml
+python3 -m arc dashboard --contracts contracts/examples/full_suite.yaml
+```
+
+Then, in a second terminal, `python3 demo/generate_load.py 15` to generate CPU
+pressure and watch the `cpu-hot-guard` contract fire, act, and restore.
+
+Run the test suite with `python3 -m pytest tests/ -q` (40 tests). The
+experiment suite from the report is reproduced by
+`sudo python3 experiments/run_experiments.py`.
+
+---
+
+## Writing contracts
+
+Contracts are plain YAML; policy changes never require code changes.
 
 ```yaml
 contracts:
   - name: compile-boost
-    description: Prioritise compilation when a compiler appears.
+    description: Prioritise compilation while a compiler is running.
     trigger:
       type: process_appears          # process_appears | process_disappears
       match: "gcc|cc1plus|make"      #   | metric_threshold | battery_below
-      debounce_sec: 1.0              # anti-flap window
+      debounce_sec: 1.0
     actions:
       - type: set_nice               # set_nice | set_affinity | suspend | resume
         target: {match: "cc1plus"}   #   | cgroup_limit | log
@@ -83,103 +124,105 @@ contracts:
     cooldown_sec: 5.0
 ```
 
-Every applied change is snapshotted (previous nice value / affinity / state) and
-**restored exactly** when the contract deactivates; PIDs are re-validated against
-process create-times to guard against PID reuse.
+Trigger conditions are predicates over live state (process table, CPU, memory,
+load, battery), evaluated every sampling interval. Action targets are resolved
+by regex against the process table at enforcement time, so the same contract
+adapts to whichever processes happen to be running. At activation, ARC
+snapshots the current priority, affinity, and state of every target; at
+restoration it reverts them exactly, validating PIDs against process
+create-times to guard against PID reuse.
 
-## Architecture
+Sample contracts covering compilation boosting, CPU-overload guarding, battery
+saving and memory-pressure handling are provided in
+`contracts/examples/full_suite.yaml`. The full schema reference lives in
+[docs/HOW_ARC_WORKS.md](docs/HOW_ARC_WORKS.md).
 
-```
-runtime system state
-        |  (psutil / /proc, every --interval seconds)
-   [monitor]  --samples-->  [sampler thread]
-                                |  events
-                          [event queue]  <-- thread-safe
-                                |
-                        [contract engine]  (IDLE -> PENDING -> ACTIVE -> RESTORING)
-                                |
-                        [action executor]  (nice / affinity / suspend / cgroup)
-                                |
-                        Linux resource state ... and repeat
-        +  [execution log]  JSONL + human-readable trace of every decision
-```
+---
 
-Modules: `monitors.py` (observation), `contracts.py` (schema + state machine),
-`actions.py` (enforcement + restore), `engine.py` (coordination & concurrency),
-`logger.py` (observability), `platform_compat.py` (capability detection),
-`cli.py` (interface). New trigger/action types plug into two registries without
-touching the engine core.
+## Demonstrating ARC
 
-## Live dashboards (for demos)
+Two live visualisations run the same engine:
 
-**Terminal UI (demo centerpiece)** — `python3 -m arc dashboard` renders a
-full-screen panel view: system gauges (CPU/MEM/LOAD/BAT), per-contract
-lifecycle badges with live state (IDLE → PENDING → ACTIVE → RESTORING), a
-streaming event feed (TRIGGER_ON → ACTIONS_APPLIED → TRIGGER_OFF → RESTORED),
-and a CPU sparkline history with event markers. Works over SSH, screen share,
-or a projector — no browser or ports needed. Degrades to plain text if `rich`
-is not installed.
+- **Terminal dashboard** (`arc dashboard`) — a full-screen view of system
+  gauges, per-contract lifecycle state, a streaming event feed
+  (TRIGGER_ON, ACTIONS_APPLIED, TRIGGER_OFF, RESTORED) and a CPU history
+  ribbon. Works over SSH, screen share and projectors; no browser or ports.
+- **Web dashboard** (`arc web`) — the same state as an offline single-page UI.
 
-**Browser UI (alternative)** — `python3 -m arc web --contracts ...` serves
-http://localhost:8777 with the same live state as inline HTML/JS/SVG (offline,
-no CDN).
+Deterministic scenario replay (`arc demo`, `arc simulate`) demonstrates the
+identical engine on any machine without privileges. Per-platform, three-minute
+demo scripts for WSL, macOS, Windows and Ubuntu are in
+[DEMO_GUIDE.md](DEMO_GUIDE.md).
 
-In a second terminal run `python3 demo/generate_load.py 15` (or a `make -j`
-build) and watch ARC react live.
+---
 
-## Cross-platform support
+## Platform support
 
-| Capability | Linux/Ubuntu | WSL | macOS | Windows native |
+ARC runs on four environments from one code base. Capabilities are detected at
+startup; unsupported or unprivileged actions are logged as skipped rather than
+failing.
+
+| Capability | Ubuntu Linux | WSL | macOS | Windows native |
 |---|---|---|---|---|
-| Monitoring (CPU/mem/procs) | full | full | full | full |
-| Battery trigger | yes | **yes (Win32 interop bridge)** | yes | yes |
-| set_nice (deprioritise) | yes | yes | yes | yes |
-| set_nice (prioritise/restore) | root | root | root | yes (priority classes) |
-| set_affinity | yes | yes | — (skipped) | yes |
-| suspend / resume | yes | yes | yes | — (skipped) |
-| cgroup limits | root | root | — (skipped) | — (skipped) |
-| `arc demo` / `web` / `simulate` | yes | yes | yes | yes (pure Python) |
-| dry-run simulate | yes | yes | yes | yes |
+| Monitoring (CPU, memory, processes) | full | full | full | full |
+| Battery trigger | yes | yes (Windows interop bridge) | yes | yes |
+| Set or restore priority | full (sudo tier) | full (sudo tier) | deprioritise; sudo tier | full (priority classes) |
+| CPU affinity | yes | yes | skipped | yes |
+| Suspend and resume | yes | yes | yes | skipped |
+| cgroup limits | root | root | skipped | skipped |
+| Demo commands (`demo`, `web`, `simulate`) | yes | yes | yes | yes |
 
-Unsupported or unprivileged operations are logged as `ACTION_SKIPPED` /
-`WARN` and the engine keeps running — never crashes.
+**Privilege tiers.** Unprivileged runs can deprioritise workloads and complete
+full affinity and suspend lifecycles. Raising priority, restoring a raised
+priority on POSIX systems, and cgroup control require elevated privileges; ARC
+clamps such changes safely and records why. Run the engine with `sudo` for the
+complete contract lifecycle.
 
-**Privilege tiers:** unprivileged runs can deprioritise workloads and fully use
-affinity/suspend lifecycles; restoring a *raised* nice value (and negative nice,
-cgroups) requires elevated privileges — run the daemon with `sudo` for the full
-contract lifecycle, like other rule-based daemons (ananicy, systemd-oomd).
+---
 
-## Experiments & results
+## Experimental results
 
-`experiments/run_experiments.py` reproduces the report's numbers
-(`experiments/results/` holds JSON, CSV, charts, `RESULTS.md`):
+Measured on Linux (2 logical CPUs, 2 GB RAM) with the reproducible suite in
+`experiments/`; raw data and charts are in `experiments/results/`.
 
-| ID | Experiment | Headline result |
-|---|---|---|
-| E1 | trigger→enforcement latency | ≈ sampling interval (202 ms @ 0.2 s); stdev < 1 ms |
-| E2 | engine overhead | 1.4 % CPU @ 1 Hz, 18.6 MB RSS |
-| E3 | restoration correctness | 40 / 40 exact restores (100 %) |
-| E4 | nice efficacy under contention | 67 % → 99.6 % CPU share when prioritised |
-| E5 | live contract lifecycle | 304 ms trigger→action, exact restore |
-| E6 | memory-pressure contract | triggers at 55 % mem, restores after clearance |
+| Experiment | Result |
+|---|---|
+| Trigger-to-enforcement latency | 202 ms at 0.2 s sampling; jitter below 6 ms |
+| Engine overhead | 1.4 percent CPU, 18.6 MB RAM at 1 Hz sampling |
+| Restoration correctness | 40 of 40 trials exact (priority and affinity) |
+| Enforcement efficacy | protected workload CPU share 67 to 99.6 percent under contention |
+| Live contract lifecycle | 304 ms trigger to action; exact restoration |
+| Memory-pressure contract | triggers under real allocation load; restores after clearance |
 
-## Project structure
+---
+
+## Repository layout
 
 ```
-arc/                  engine package (monitor, contracts, actions, engine, logger, web, cli)
-contracts/examples/   sample YAML contracts
-tests/                36 unit + integration tests (pytest)
-demo/                 scenario demo + portable CPU load generator
-experiments/          E1-E6 experiment suite + results/
-docs/                 final report (docx) + presentation (pptx) + figures
-DEMO_GUIDE.md         3-minute demo scripts per platform (WSL/macOS/Windows/Ubuntu)
-GAP_ANALYSIS.md       gap review & optimization report
-AUDIT.md              audit trail & review-3 checklist
-push_to_github.sh     one-shot publish script
+arc/                 engine: monitor, contracts, actions, engine, logger, web, cli
+contracts/examples/  sample YAML contracts
+tests/               40 unit and integration tests
+demo/                scenario files and portable CPU load generator
+experiments/         experiment suite and measured results
+docs/                final report, presentation, figures, design notes
+scripts/             report and presentation builders
 ```
 
-## Academic note
+Documentation index:
 
-Course: BCSE303L Operating Systems. Team: Gagan Kishore (24BDE0073),
-Shikhar Sahay (24BYB0029), under the guidance of Dr. Balasubramani M.
-Please keep citations and academic-integrity rules in any derived documents.
+- [docs/ARC_Final_Report.docx](docs/ARC_Final_Report.docx) — final project report
+- [docs/ARC_Final_Presentation.pptx](docs/ARC_Final_Presentation.pptx) — presentation deck
+- [docs/HOW_ARC_WORKS.md](docs/HOW_ARC_WORKS.md) — contract model and the dynamic policy loop
+- [DEMO_GUIDE.md](DEMO_GUIDE.md) — per-platform demonstration scripts
+- [GAP_ANALYSIS.md](GAP_ANALYSIS.md) — gap review and optimisation notes
+- [AUDIT.md](AUDIT.md) — audit trail and review checklist
+
+---
+
+## Project
+
+Course: BCSE303L, Operating Systems.
+Team: Gagan Kishore (24BDE0073), Shikhar Sahay (24BYB0029).
+Guide: Dr. Balasubramani M.
+
+Released under the MIT License (see LICENSE).
