@@ -25,6 +25,20 @@ def is_windows() -> bool:
     return sys.platform in ("win32", "cygwin")
 
 
+def is_wsl() -> bool:
+    """True when running inside Windows Subsystem for Linux."""
+    if not is_linux():
+        return False
+    if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSL_INTEROP"):
+        return True
+    try:
+        with open("/proc/version", encoding="utf-8", errors="ignore") as f:
+            v = f.read().lower()
+        return "microsoft" in v or "wsl" in v
+    except OSError:
+        return False
+
+
 def is_posix() -> bool:
     return os.name == "posix"
 

@@ -19,6 +19,7 @@ class ExecutionLog:
         self.echo = echo
         self._lock = threading.Lock()
         self.entries: list[dict] = []
+        self._handles: dict[str, "object"] = {}
         self.jsonl_path = None
         self.text_path = None
         if log_dir:
@@ -38,14 +39,30 @@ class ExecutionLog:
         with self._lock:
             self.entries.append(entry)
             if self.jsonl_path:
-                with open(self.jsonl_path, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(entry, default=str) + "\n")
+                self._append(self.jsonl_path, json.dumps(entry, default=str) + "\n")
             if self.text_path:
-                with open(self.text_path, "a", encoding="utf-8") as f:
-                    f.write(self._format(entry) + "\n")
+                self._append(self.text_path, self._format(entry) + "\n")
         if self.echo:
             print(self._format(entry), flush=True)
         return entry
+
+    def _append(self, path: str, text: str):
+        """Append via a persistent handle (keeps open/close cost off the hot path)."""
+        h = self._handles.get(path)
+        if h is None or h.closed:
+            h = open(path, "a", encoding="utf-8")
+            self._handles[path] = h
+        h.write(text)
+        h.flush()
+
+    def close(self):
+        with self._lock:
+            for h in self._handles.values():
+                try:
+                    h.close()
+                except OSError:
+                    pass
+            self._handles.clear()
 
     @staticmethod
     def _format(entry: dict) -> str:

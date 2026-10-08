@@ -8,7 +8,9 @@ the exact same engine run against a live machine or a replayed scenario
 
 from __future__ import annotations
 
+import functools
 import re
+import subprocess
 import threading
 import time
 from typing import Optional
@@ -16,15 +18,54 @@ from typing import Optional
 import psutil
 
 from .events import BatteryInfo, ProcessInfo, SystemSample
+from . import platform_compat as cap
 from .platform_compat import is_windows
+
+
+def wsl_battery(timeout: float = 4.0) -> BatteryInfo:
+    """Battery status for WSL via Windows interop (PowerShell / Win32_Battery).
+
+    WSL exposes no battery device, so without this the battery-saver contract
+    could never fire inside WSL - the primary Windows demo environment. The
+    caller caches results because interop invocation is comparatively slow.
+    """
+    ps = ("$b = Get-CimInstance Win32_Battery | Select-Object -First 1; "
+          "if ($b) { Write-Output ($b.EstimatedChargeRemaining.ToString() + ',' + $b.BatteryStatus.ToString()) } "
+          "else { Write-Output 'none' }")
+    for exe in ("powershell.exe", "pwsh.exe"):
+        try:
+            out = subprocess.run(
+                [exe, "-NoProfile", "-NonInteractive", "-Command", ps],
+                capture_output=True, text=True, timeout=timeout,
+            ).stdout.strip()
+        except (FileNotFoundError, subprocess.SubprocessError, OSError):
+            continue
+        return parse_wsl_battery(out)
+    return BatteryInfo(None, None)
+
+
+def parse_wsl_battery(out: str) -> BatteryInfo:
+    """"percent,status" -> BatteryInfo. Win32_Battery status: 1=discharging, 2=AC."""
+    out = (out or "").strip()
+    if not out or out.lower() == "none":
+        return BatteryInfo(None, None)
+    try:
+        pct_s, status_s = out.split(",")[:2]
+        percent = float(pct_s)
+        plugged = int(status_s) == 2
+        return BatteryInfo(percent, plugged)
+    except (ValueError, TypeError):
+        return BatteryInfo(None, None)
 
 
 class RealMonitor:
     """Samples real system state through psutil (/proc on Linux)."""
 
-    def __init__(self):
+    def __init__(self, battery_ttl: float = 10.0):
         self._proc_handles: dict[int, psutil.Process] = {}
         self._psutil = psutil
+        self._battery_cache = (BatteryInfo(None, None), 0.0)
+        self._battery_ttl = battery_ttl
         # Prime per-process cpu counters (first call returns 0.0 by design).
         self.sample()
 
@@ -32,15 +73,27 @@ class RealMonitor:
         try:
             b = psutil.sensors_battery()
         except (AttributeError, NotImplementedError):
-            return BatteryInfo(None, None)
-        if b is None:
-            return BatteryInfo(None, None)
-        # psutil reports negative sentinel values for "unknown"/"unlimited"
-        # time remaining (POWER_TIME_UNKNOWN / POWER_TIME_UNLIMITED).
-        secs = getattr(b, "secsleft", None)
-        if secs is not None and secs < 0:
-            secs = None
-        return BatteryInfo(b.percent, b.power_plugged, secs)
+            b = None
+        if b is not None:
+            # psutil reports negative sentinel values for "unknown"/"unlimited"
+            # time remaining (POWER_TIME_UNKNOWN / POWER_TIME_UNLIMITED).
+            secs = getattr(b, "secsleft", None)
+            if secs is not None and secs < 0:
+                secs = None
+            return BatteryInfo(b.percent, b.power_plugged, secs)
+        # WSL has no battery device; ask Windows for it (cached - interop is slow).
+        if cap.is_wsl():
+            return self._wsl_battery()
+        return BatteryInfo(None, None)
+
+    def _wsl_battery(self) -> BatteryInfo:
+        now = time.time()
+        cached, at = self._battery_cache
+        if now - at < self._battery_ttl:
+            return cached
+        info = wsl_battery()
+        self._battery_cache = (info, now)
+        return info
 
     def sample(self) -> SystemSample:
         cpu = psutil.cpu_percent(interval=None)
@@ -52,7 +105,9 @@ class RealMonitor:
 
         procs: list[ProcessInfo] = []
         fresh: dict[int, psutil.Process] = {}
-        for p in psutil.process_iter():
+        # attrs= lets psutil batch reads via oneshot; far fewer syscalls per sample.
+        for p in psutil.process_iter(["name", "cmdline", "nice", "status",
+                                      "create_time", "num_threads", "memory_percent"]):
             try:
                 pid = p.pid
                 if pid not in self._proc_handles:
@@ -60,34 +115,22 @@ class RealMonitor:
                 else:
                     fresh[pid] = self._proc_handles[pid]
                 handle = fresh[pid]
-                with p.oneshot():
-                    name = p.name()
-                    try:
-                        cmdline = " ".join(p.cmdline()) or name
-                    except (psutil.AccessDenied, psutil.ZombieProcess):
-                        cmdline = name
-                    try:
-                        nice = p.nice()
-                    except (psutil.AccessDenied, psutil.ZombieProcess):
-                        nice = None
-                    try:
-                        status = p.status()
-                    except (psutil.AccessDenied, psutil.ZombieProcess):
-                        status = "?"
-                    cpu_pct = handle.cpu_percent(None)
-                    procs.append(
-                        ProcessInfo(
-                            pid=pid,
-                            name=name,
-                            cmdline=cmdline,
-                            cpu_percent=cpu_pct,
-                            mem_percent=p.memory_percent(),
-                            nice=nice,
-                            status=status,
-                            create_time=p.create_time(),
-                            num_threads=p.num_threads(),
-                        )
+                info = p.info
+                name = info.get("name") or "unknown"
+                cmdline = " ".join(info.get("cmdline") or []) or name
+                procs.append(
+                    ProcessInfo(
+                        pid=pid,
+                        name=name,
+                        cmdline=cmdline,
+                        cpu_percent=handle.cpu_percent(None),
+                        mem_percent=info.get("memory_percent") or 0.0,
+                        nice=info.get("nice"),
+                        status=info.get("status") or "?",
+                        create_time=info.get("create_time") or 0.0,
+                        num_threads=info.get("num_threads") or 1,
                     )
+                )
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
         self._proc_handles = fresh
@@ -188,4 +231,9 @@ def spawn_dummy(name: str = "arc-dummy-sleep", args: Optional[list[str]] = None)
 
 
 def regex_compile(pattern: str) -> re.Pattern:
+    return re.compile(pattern, re.IGNORECASE)
+
+
+@functools.lru_cache(maxsize=256)
+def regex_compile_cached(pattern: str) -> re.Pattern:
     return re.compile(pattern, re.IGNORECASE)

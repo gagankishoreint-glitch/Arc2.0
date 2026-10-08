@@ -14,6 +14,7 @@ entry instead of crashing.
 
 from __future__ import annotations
 
+import functools
 import dataclasses
 import os
 import re
@@ -26,6 +27,11 @@ import psutil
 
 from . import platform_compat as cap
 from .events import ProcessInfo, SystemSample
+
+
+@functools.lru_cache(maxsize=256)
+def _compile_rx(pattern: str) -> re.Pattern:
+    return re.compile(pattern, re.IGNORECASE)
 
 
 @dataclasses.dataclass
@@ -69,7 +75,7 @@ class BaseExecutor:
         if "pid" in target:
             found = [p for p in sample.procs if p.pid == int(target["pid"])]
         elif "match" in target:
-            rx = re.compile(target["match"], re.IGNORECASE)
+            rx = _compile_rx(target["match"])
             found = sample.find_procs(rx, exclude_pids=self._exclude())
         else:
             found = []
@@ -179,14 +185,18 @@ class SystemExecutor(BaseExecutor):
         return ActionResult("applied", changes)
 
     def _suspend(self, action: dict, sample: SystemSample) -> ActionResult:
-        return self._signal_action(action, sample, signal.SIGSTOP, "suspend")
+        return self._signal_action(action, sample, "SIGSTOP", "suspend")
 
     def _resume(self, action: dict, sample: SystemSample) -> ActionResult:
-        return self._signal_action(action, sample, signal.SIGCONT, "resume")
+        return self._signal_action(action, sample, "SIGCONT", "resume")
 
-    def _signal_action(self, action: dict, sample: SystemSample, sig, name: str) -> ActionResult:
+    def _signal_action(self, action: dict, sample: SystemSample, sig_name: str, name: str) -> ActionResult:
         if not cap.supports_suspend():
             return ActionResult("skipped", [], f"{name} not supported on this platform")
+        # Resolve the signal lazily: signal.SIGSTOP/SIGCONT do not exist on Windows.
+        sig = getattr(signal, sig_name, None)
+        if sig is None:
+            return ActionResult("skipped", [], f"{sig_name} unavailable on this platform")
         targets = self.resolve(action, sample)
         if not targets:
             return ActionResult("skipped", [], f"no process matched {action.get('target')}")
@@ -252,7 +262,10 @@ class SystemExecutor(BaseExecutor):
             elif change.action_type == "set_affinity":
                 p.cpu_affinity(change.prev["cpus"])
             elif change.action_type == "suspend":
-                os.kill(change.pid, signal.SIGCONT)  # restoring means "running again"
+                cont = getattr(signal, "SIGCONT", None)
+                if cont is None:
+                    return False
+                os.kill(change.pid, cont)  # restoring means "running again"
             elif change.action_type == "resume":
                 pass  # resume has no inverse other than suspend; lifecycle handles ordering
             elif change.action_type == "cgroup_limit":

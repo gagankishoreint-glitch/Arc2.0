@@ -53,6 +53,7 @@ def cmd_run(args) -> int:
 
 
 def cmd_simulate(args) -> int:
+    import os
     with open(args.scenario, encoding="utf-8") as f:
         scenario = json.load(f)
     speed = args.speed
@@ -60,9 +61,62 @@ def cmd_simulate(args) -> int:
     monitor = SyntheticMonitor(steps, speed=speed, start_procs=scenario.get("start_procs", []))
     executor = SystemExecutor() if args.real_actions else BaseExecutor()
     total_t = max((s["t"] for s in steps), default=1.0) / speed
+    if args.duration is None:
+        # Default: just past the end of the virtual timeline (never runs forever).
+        args.duration = total_t + 2.0
     engine = _run_engine(args, monitor=monitor, executor=executor, log_dir=args.log_dir)
-    print("simulation finished; virtual timeline:", total_t, "s")
+    print("simulation finished; virtual timeline:", round(total_t, 2), "s")
     print("summary:", json.dumps(engine.log.summary()))
+    engine.log.close()
+    return 0
+
+
+def cmd_demo(args) -> int:
+    """Guided, cross-platform demonstration of the full ARC story.
+
+    Pure Python (no bash): runs identically on Windows, WSL, macOS and Linux.
+    """
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    contracts = args.contracts or os.path.join(root, "contracts", "examples", "full_suite.yaml")
+    scenario = args.scenario or os.path.join(root, "demo", "scenario_compile_battery.json")
+
+    banner = "=" * 68
+    print(f"{banner}\n  ARC LIVE DEMO  -  Adaptive Resource Contract Engine\n"
+          f"  trigger -> actions -> restoration, on this machine, right now\n{banner}")
+
+    print("\n[1/4] Platform capability report")
+    args.func = None
+    rc = cmd_status(args)
+    if rc:
+        return rc
+
+    print("\n[2/4] Contract validation")
+    class _A:  # tiny args shim
+        pass
+    a = _A()
+    a.contracts = contracts
+    rc = cmd_validate(a)
+    if rc:
+        return rc
+
+    print("\n[3/4] Scenario replay (compiler appears, CPU rises, battery drops)")
+    s = _A()
+    s.contracts = contracts
+    s.scenario = scenario
+    s.speed = args.speed
+    s.interval = 1.0
+    s.duration = None
+    s.log_dir = args.log_dir
+    s.real_actions = False
+    cmd_simulate(s)
+
+    print("\n[4/4] Built-in end-to-end selftest")
+    cmd_selftest(args)
+
+    print(f"\n{banner}\n  NEXT:  python3 -m arc web --contracts {os.path.relpath(contracts, root)}"
+          f"\n         open http://localhost:8777 and run: python3 demo/generate_load.py 15\n"
+          f"         to watch contracts fire on the live dashboard\n{banner}")
     return 0
 
 
@@ -162,6 +216,13 @@ def build_parser() -> argparse.ArgumentParser:
     wb.add_argument("--port", type=int, default=8777)
     wb.add_argument("--host", default="0.0.0.0")
     wb.set_defaults(func=cmd_web)
+
+    dm = sub.add_parser("demo", help="guided cross-platform demonstration (pure Python)")
+    dm.add_argument("--contracts", default=None)
+    dm.add_argument("--scenario", default=None)
+    dm.add_argument("--speed", type=float, default=3.0)
+    dm.add_argument("--log-dir", default="logs")
+    dm.set_defaults(func=cmd_demo)
 
     se = sub.add_parser("selftest", help="built-in end-to-end smoke test")
     se.set_defaults(func=cmd_selftest)

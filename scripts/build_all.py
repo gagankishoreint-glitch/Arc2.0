@@ -336,9 +336,13 @@ def build_report(data):
     p("The implementation is portable Python built on psutil, with a capability layer that detects "
       "platform features at startup. Linux and WSL support the full action set; macOS degrades "
       "gracefully where affinity is unavailable; Windows supports priority and affinity but not POSIX "
-      "signal suspend. Several operations require elevated privileges (negative nice values, cgroups, "
+      "signal suspend. WSL exposes no battery device, so ARC bridges to the Windows battery through "
+      "a cached interop call, keeping the battery-saver contract functional in the WSL demo "
+      "environment. Several operations require elevated privileges (negative nice values, cgroups, "
       "and restoring a raised nice value on POSIX). ARC detects privileges at startup, clamps "
-      "unprivileged nice changes to safe values, and logs skipped actions instead of failing.")
+      "unprivileged nice changes to safe values, and logs skipped actions instead of failing. "
+      "A guided demonstration command (arc demo) and a portable load generator run identically on "
+      "all four supported platforms.")
 
     # ---------------- 4. implementation steps
     h("4. Implementation Steps", 1)
@@ -712,14 +716,15 @@ def build_ppt(data):
     # 9 implementation
     s = slide("Implementation", "Portable Python + psutil; one codebase, four platforms")
     bullets(s, [
-        "7 modules: monitor, events, contracts, actions, engine, logger, cli (~1,500 LOC)",
+        "8 modules: monitor, events, contracts, actions, engine, logger, web, cli",
         "Concurrency: sampler thread → thread-safe event queue → coordinator (RLock)",
         "Capability layer: unsupported actions logged as SKIPPED, never crash",
         "Privilege handling: nice clamping, cgroup/affinity fallbacks, clear log warnings",
-        "Cross-platform: Linux & WSL (full), macOS (no affinity), Windows (no signal suspend)",
-        "CLI: arc validate | run | simulate | selftest | status",
-        "21 unit + integration tests (pytest), 100% pass in both privilege modes",
-    ], size=18)
+        "Cross-platform: WSL (full + battery interop bridge), Ubuntu (full), macOS (no affinity),",
+        "  Windows native (no signal suspend; nice ↔ priority classes both ways)",
+        "CLI: arc validate | run | simulate | demo | web | selftest | status",
+        "36 unit + integration tests (pytest), 100% pass in both privilege modes",
+    ], size=16)
 
     # 10 demo
     s = slide("Demo Walkthrough", "compile-boost contract + live web dashboard")

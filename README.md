@@ -32,16 +32,17 @@ Linux: `pip install -r requirements.txt` works directly.
 ```bash
 python3 -m arc status                                   # platform capability report
 python3 -m arc validate contracts/examples/full_suite.yaml
+python3 -m arc demo                                     # guided demo - works on ALL platforms
 python3 -m arc selftest                                 # end-to-end smoke test (safe)
-python3 -m pytest tests/ -q                             # 27 tests
+python3 -m pytest tests/ -q                             # 36 tests
 
 # LIVE VISUAL DASHBOARD - best for showing a demo (open http://localhost:8777)
 python3 -m arc web --contracts contracts/examples/full_suite.yaml
-bash demo/generate_load.sh 20     # in a second terminal - watch contracts fire
+python3 demo/generate_load.py 15   # in a second terminal - watch contracts fire
 
-bash demo/run_demo.sh             # scripted cross-platform demo (dry-run)
+bash demo/run_demo.sh             # scripted demo (POSIX shells only)
 
-# live enforcement (Linux/WSL/macOS; use sudo for the full privilege tier)
+# live enforcement (WSL/macOS/Ubuntu; use sudo for the full privilege tier)
 sudo python3 -m arc run --contracts contracts/examples/full_suite.yaml --interval 1
 
 # deterministic scenario replay on any OS (add --real-actions to really enforce)
@@ -49,8 +50,9 @@ python3 -m arc simulate --contracts contracts/examples/full_suite.yaml \
          --scenario demo/scenario_compile_battery.json --speed 3
 ```
 
-Run the tests: `python3 -m pytest tests/` (27 tests).
+Run the tests: `python3 -m pytest tests/` (36 tests).
 Re-run the experiments: `sudo python3 experiments/run_experiments.py`.
+Per-platform demo scripts: see **DEMO_GUIDE.md** (WSL / macOS / Windows / Ubuntu).
 
 ---
 
@@ -124,15 +126,16 @@ macOS and Windows with no extra dependencies.
 
 ## Cross-platform support
 
-| Capability | Linux | WSL | macOS | Windows |
+| Capability | Linux/Ubuntu | WSL | macOS | Windows native |
 |---|---|---|---|---|
 | Monitoring (CPU/mem/procs) | full | full | full | full |
-| Battery trigger | yes | via Windows | yes | yes |
+| Battery trigger | yes | **yes (Win32 interop bridge)** | yes | yes |
 | set_nice (deprioritise) | yes | yes | yes | yes |
-| set_nice (prioritise) | root | root | root | yes |
+| set_nice (prioritise/restore) | root | root | root | yes (priority classes) |
 | set_affinity | yes | yes | — (skipped) | yes |
 | suspend / resume | yes | yes | yes | — (skipped) |
 | cgroup limits | root | root | — (skipped) | — (skipped) |
+| `arc demo` / `web` / `simulate` | yes | yes | yes | yes (pure Python) |
 | dry-run simulate | yes | yes | yes | yes |
 
 Unsupported or unprivileged operations are logged as `ACTION_SKIPPED` /
@@ -160,12 +163,14 @@ contract lifecycle, like other rule-based daemons (ananicy, systemd-oomd).
 ## Project structure
 
 ```
-arc/                  engine package (monitor, contracts, actions, engine, logger, cli)
+arc/                  engine package (monitor, contracts, actions, engine, logger, web, cli)
 contracts/examples/   sample YAML contracts
-tests/                27 unit + integration tests (pytest)
-demo/                 cross-platform scenario demo + CPU load generator
+tests/                36 unit + integration tests (pytest)
+demo/                 scenario demo + portable CPU load generator
 experiments/          E1-E6 experiment suite + results/
 docs/                 final report (docx) + presentation (pptx) + figures
+DEMO_GUIDE.md         3-minute demo scripts per platform (WSL/macOS/Windows/Ubuntu)
+GAP_ANALYSIS.md       gap review & optimization report
 AUDIT.md              audit trail & review-3 checklist
 push_to_github.sh     one-shot publish script
 ```
