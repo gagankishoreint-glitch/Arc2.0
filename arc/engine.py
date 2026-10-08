@@ -120,6 +120,8 @@ class ArcEngine:
 
     def _deactivate(self, rt: ContractRuntime, wall_ts: float):
         c = rt.contract
+        self.log.record(EventKind.TRIGGER_OFF.value, c.name, ts=wall_ts,
+                        restore_mode=c.restore_mode)
         with self._lock:
             rt.state = State.RESTORING
             changes = rt.applied_changes

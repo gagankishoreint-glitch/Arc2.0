@@ -94,6 +94,89 @@ def make_kpi_figure(path, data):
     plt.close(fig)
 
 
+def make_gap_figure(path):
+    """The research-gap visual: comparison table + the closed policy loop."""
+    fig = plt.figure(figsize=(12.6, 5.2))
+    gs = fig.add_gridspec(1, 2, width_ratios=[1.35, 1.0], wspace=0.08)
+
+    # ---- left: comparison table ------------------------------------------
+    ax = fig.add_subplot(gs[0])
+    ax.axis("off")
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 6.2)
+    rows = [
+        ("", "Manual\nscripts", "Ananicy / oomd /\nTuneD", "ARC"),
+        ("Monitors system state", "—", "partial", "✓"),
+        ("User-defined contracts", "✗", "app-specific rules", "✓ YAML"),
+        ("Multiple action types", "partial", "limited", "✓ nice/affinity/\nsuspend/cgroup"),
+        ("Automatic restoration", "✗", "✗", "✓ exact, PID-safe"),
+        ("Closed policy loop", "✗", "✗", "✓"),
+    ]
+    col_x = [0.15, 3.4, 5.55, 8.0]
+    col_w = [3.2, 2.1, 2.45, 1.95]
+    y = 5.55
+    heights = [0.85, 0.62, 0.62, 0.85, 0.62, 0.62]
+    for r, (label, a, b, c) in enumerate(rows):
+        h = heights[r]
+        if r == 0:
+            for i, txt in enumerate((label, a, b, c)):
+                ax.add_patch(FancyBboxPatch((col_x[i], y - h), col_w[i], h,
+                                            boxstyle="round,pad=0.02",
+                                            fc="#2b6cb0" if i == 3 else "#4a5568",
+                                            ec="white", lw=1.0))
+                ax.text(col_x[i] + col_w[i] / 2, y - h / 2, txt, ha="center", va="center",
+                        fontsize=10.5, fontweight="bold", color="white")
+        else:
+            fill = "#ebf8ff" if r % 2 else "#f7fafc"
+            for i, txt in enumerate((label, a, b, c)):
+                highlight = (i == 3)
+                ax.add_patch(FancyBboxPatch((col_x[i], y - h), col_w[i], h,
+                                            boxstyle="round,pad=0.02",
+                                            fc="#c3dafe" if highlight else fill,
+                                            ec="#a0aec0", lw=0.8))
+                color = "#1a365d" if highlight else "#2d3748"
+                weight = "bold" if (highlight or i == 0) else "normal"
+                ax.text(col_x[i] + col_w[i] / 2, y - h / 2, txt, ha="center", va="center",
+                        fontsize=10 if not highlight else 10.5, color=color, fontweight=weight)
+        y -= h + 0.06
+    ax.text(5.0, 0.12, "Only ARC closes the loop end-to-end", ha="center",
+            fontsize=11, fontweight="bold", color="#2b6cb0")
+
+    # ---- right: the closed loop ------------------------------------------
+    ax2 = fig.add_subplot(gs[1])
+    ax2.axis("off")
+    ax2.set_xlim(-1.35, 1.35)
+    ax2.set_ylim(-1.35, 1.35)
+    stages = ["Monitor", "Detect", "Decide", "Enforce", "Restore"]
+    import math
+    angles = [90 - i * 72 for i in range(5)]
+    pos = [(math.cos(math.radians(a)), math.sin(math.radians(a))) for a in angles]
+    for i, ((x, y2), name) in enumerate(zip(pos, stages)):
+        ax2.add_patch(plt.Circle((x * 0.92, y2 * 0.92), 0.30, fc="#2b6cb0", ec="#1a365d", lw=1.5))
+        ax2.text(x * 0.92, y2 * 0.92, name, ha="center", va="center",
+                 fontsize=9.5, fontweight="bold", color="white")
+        x1, y1 = pos[i]
+        x2p, y2p = pos[(i + 1) % 5]
+        ax2.add_patch(FancyArrowPatch((x1 * 0.70, y1 * 0.70), (x2p * 0.70, y2p * 0.70),
+                                      arrowstyle="-|>", mutation_scale=13, lw=1.8,
+                                      color="#4a5568",
+                                      connectionstyle="arc3,rad=-0.25"))
+    ax2.text(0, 0, "ARC\npolicy loop", ha="center", va="center", fontsize=13,
+             fontweight="bold", color="#2b6cb0")
+    notes = [
+        (0.0, 1.28, "Ananicy: rules only here", "#b7791f"),
+        (1.18, -0.55, "oomd: memory slice", "#b7791f"),
+        (-1.22, -0.55, "TuneD: profiles", "#b7791f"),
+    ]
+    for x, y2, txt, col in notes:
+        ax2.text(x, y2, txt, ha="center", fontsize=8.5, color=col, style="italic")
+    ax2.set_title("One contract spans the whole loop", fontsize=11,
+                  fontweight="bold", color="#1a365d", pad=8)
+
+    fig.savefig(path, dpi=170, bbox_inches="tight")
+    plt.close(fig)
+
+
 def make_state_machine(path):
     fig, ax = plt.subplots(figsize=(8.6, 3.2))
     ax.set_xlim(0, 10)
@@ -270,8 +353,13 @@ def build_report(data):
       "already exist, and several tools demonstrate partial automation. However, monitoring and "
       "enforcement remain separate, policies are predominantly static, and no lightweight abstraction "
       "connects runtime conditions, resource actions, and restoration behavior within a single "
-      "user-defined contract. ARC investigates exactly this gap: a policy layer that coordinates "
-      "existing mechanisms rather than replacing them.")
+      "user-defined contract. In short, existing tools each cover one slice of the policy cycle, "
+      "while none of them closes the monitor-detect-decide-enforce-restore loop as a single "
+      "user-defined unit (Figure 1). ARC investigates exactly this gap: a policy layer that "
+      "coordinates existing mechanisms rather than replacing them.")
+    figure(os.path.join(DOCS, "fig_gap.png"),
+           "Figure 1: The research gap. Manual scripts and existing automation tools each cover a "
+           "slice of the policy cycle; an ARC contract spans the complete closed loop.")
 
     # ---------------- 2. problem statement
     h("2. Problem Statement", 1)
@@ -305,7 +393,7 @@ def build_report(data):
       "periodically observes the system and posts events to a thread-safe queue; a coordinator thread "
       "evaluates contracts and executes actions serially, so enforcement can never race monitoring.")
     figure(os.path.join(DOCS, "fig_architecture.png"),
-           "Figure 1: ARC architecture. Monitoring feeds event detection; the contract engine decides; "
+           "Figure 2: ARC architecture. Monitoring feeds event detection; the contract engine decides; "
            "the executor enforces through existing OS interfaces; snapshots enable restoration.")
     h("3.2 Contract Model", 2)
     p("Each resource contract has three primary components: a trigger condition, one or more "
@@ -325,7 +413,7 @@ def build_report(data):
       "process is re-validated by PID and create-time to guard against PID reuse. A cooldown window "
       "prevents immediate re-triggering.")
     figure(os.path.join(DOCS, "fig_state_machine.png"),
-           "Figure 2: Per-contract lifecycle. Restoration returns the system to its pre-contract state.")
+           "Figure 3: Per-contract lifecycle. Restoration returns the system to its pre-contract state.")
     h("3.4 Concurrency and Safety", 2)
     p("The sampler thread only observes; the coordinator performs all resource changes, serialized "
       "through an event queue and a re-entrant lock guarding contract state. This satisfies the "
@@ -398,7 +486,7 @@ def build_report(data):
       "interval; the anti-flap debounce window adds exactly one evaluation cycle by design. Operators "
       "can therefore trade monitoring overhead against responsiveness deterministically.")
     figure(os.path.join(RESULTS, "e1_latency.png"),
-           "Figure 3: Detection latency versus sampling interval and debounce (mean ± stdev).")
+           "Figure 4: Detection latency versus sampling interval and debounce (mean ± stdev).")
     h("5.2 Engine Overhead (E2)", 2)
     rows = [[k, v["cpu_percent_mean"], v["cpu_percent_max"], v["rss_mb_mean"]]
             for k, v in data["e2"].items()]
@@ -410,7 +498,7 @@ def build_report(data):
       "linearly with sampling frequency, so the engine is practical for continuous background "
       "operation alongside user workloads.")
     figure(os.path.join(RESULTS, "e2_overhead.png"),
-           "Figure 4: ARC CPU overhead versus sampling interval (20 background processes).")
+           "Figure 5: ARC CPU overhead versus sampling interval (20 background processes).")
     h("5.3 Restoration Correctness (E3)", 2)
     p(f"In {data['e3']['trials']} independent trials, a process's priority and CPU affinity were "
       "modified by contract actions and then reverted when the contract deactivated. ARC restored "
@@ -430,16 +518,16 @@ def build_report(data):
       "under 14%. Contract actions therefore translate directly into measurable scheduling outcomes, "
       "confirming that ARC's enforcement layer meaningfully influences resource allocation.")
     figure(os.path.join(RESULTS, "e4_nice.png"),
-           "Figure 5: Worker CPU share under contention for different contract-enforced priority levels.")
+           "Figure 6: Worker CPU share under contention for different contract-enforced priority levels.")
     h("5.5 Live Contract Lifecycle (E5)", 2)
     p("A full live contract was exercised with real processes and real actions: when a compiler "
       "process appeared, its priority was raised and a background workload was deprioritized; when "
       f"the compiler exited, all changes were reverted. Trigger-to-first-action latency was "
       f"{data['e5']['trigger_to_action_ms']} ms at the 0.2 s sampling interval, and the background "
       f"workload's nice value returned exactly to its original value (restore exact: "
-      f"{data['e5']['restore_exact']}). Figure 6 shows the observed lifecycle timeline.")
+      f"{data['e5']['restore_exact']}). Figure 7 shows the observed lifecycle timeline.")
     figure(os.path.join(RESULTS, "e5_lifecycle.png"),
-           "Figure 6: Live contract lifecycle: trigger, enforcement, restoration.")
+           "Figure 7: Live contract lifecycle: trigger, enforcement, restoration.")
     h("5.6 Memory-Pressure Contract (E6)", 2)
     p("A contract monitored memory utilization and deprioritized the largest memory consumer when "
       f"usage stayed above 55% for 2 s. During the experiment, memory rose from "
@@ -671,6 +759,10 @@ def build_ppt(data):
         "system calls, concurrency, protection",
     ], size=19)
 
+    s = slide("The Gap: Nobody Closes the Loop",
+              "Existing tools each cover a slice — a contract spans the whole cycle")
+    add_pic(s, os.path.join(DOCS, "fig_gap.png"), 0.7, 1.55, 12.0)
+
     # 6 architecture
     s = slide("Architecture", "Modular pipeline — every stage extensible in isolation")
     add_pic(s, os.path.join(DOCS, "fig_architecture.png"), 1.2, 1.5, 11.0)
@@ -727,14 +819,14 @@ def build_ppt(data):
     ], size=16)
 
     # 10 demo
-    s = slide("Demo Walkthrough", "compile-boost contract + live web dashboard")
+    s = slide("Demo Walkthrough", "arc dashboard — the closed loop, live on screen")
     bullets(s, [
-        "1. python3 -m arc web  → live dashboard: gauges, contract states, event feed",
+        "1. python3 -m arc dashboard → full-screen terminal UI (works on projector/SSH)",
         "2. gcc/make appears → debounce 1 s → compiler boosted (nice −5), background deprioritized",
-        "3. Build finishes → trigger clears → original nice/affinity restored exactly",
-        "4. Battery drops below 25% → background workloads suspended; plugged in → resumed",
-        "5. bash demo/generate_load.sh → CPU pressure → cpu-hot-guard fires on screen",
-        ("Safe dry-run demo runs on any OS: bash demo/run_demo.sh", 1),
+        "3. Build finishes → TRIGGER_OFF → original nice/affinity restored exactly",
+        "4. bash demo/generate_load.sh → CPU pressure → cpu-hot-guard fires with sparkline history",
+        "5. Battery below 25% → workloads suspended; plugged in → resumed (WSL bridge included)",
+        ("Browser alternative: python3 -m arc web  →  http://localhost:8777", 1),
     ], size=17)
 
     # 11 results latency+overhead
@@ -843,6 +935,7 @@ def build_ppt(data):
 if __name__ == "__main__":
     make_architecture(os.path.join(DOCS, "fig_architecture.png"))
     make_state_machine(os.path.join(DOCS, "fig_state_machine.png"))
+    make_gap_figure(os.path.join(DOCS, "fig_gap.png"))
     data = load_results()
     make_kpi_figure(os.path.join(DOCS, "fig_kpi.png"), data)
     print("saved diagrams")

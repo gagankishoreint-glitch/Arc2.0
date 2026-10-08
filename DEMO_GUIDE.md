@@ -50,20 +50,25 @@ python3 -m arc demo
 > on WSL you get the full Linux action set, on macOS affinity is skipped, on
 > Windows signals are skipped. Nothing crashes; everything is logged."*
 
-**Terminal 1 — the live visual dashboard:**
+**Terminal 1 — the live visual (demo centerpiece):**
 ```bash
-python3 -m arc web --contracts contracts/examples/full_suite.yaml
-# → open http://localhost:8777
+python3 -m arc dashboard --contracts contracts/examples/full_suite.yaml
 ```
+> Full-screen terminal UI: system gauges, contract badges moving
+> `IDLE → PENDING → ACTIVE → RESTORING`, live event feed
+> (`TRIGGER_ON → ACTIONS_APPLIED → TRIGGER_OFF → RESTORED`), CPU sparkline
+> with event markers. Works on a projector, over SSH, or in any terminal —
+> no browser or ports. (Browser alternative: `python3 -m arc web` →
+> http://localhost:8777.)
 
 **Terminal 2 — generate pressure and watch contracts fire:**
 ```bash
 python3 demo/generate_load.py 15
 ```
-> Point at the screen: CPU gauge spikes → `cpu-hot-guard` turns green **ACTIVE** →
-> the heaviest process appears under Managed processes with nice `0 → 19` →
-> load stops → **RESTORING** → state reverts to `0`. *"Trigger, actions,
-> restoration — the full contract lifecycle, visible live."*
+> Point at the screen: CPU sparkline spikes → `cpu-hot-guard` turns green
+> **ACTIVE** with a live elapsed timer → events stream in → load stops →
+> `TRIGGER_OFF` → **RESTORED 2/2 exact**. *"Trigger, actions, restoration —
+> the whole gap-closing loop, visible in motion."*
 
 **Battery moment (platform-specific, pick yours):**
 

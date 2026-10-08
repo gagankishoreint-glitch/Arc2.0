@@ -128,6 +128,27 @@ def cmd_status(args) -> int:
     return 0
 
 
+def cmd_dashboard(args) -> int:
+    """Terminal UI demo centerpiece: engine + live dashboard in one process."""
+    from .actions import SystemExecutor
+    from .dashboard import HAS_RICH, TerminalDashboard
+
+    contracts = load_contracts(args.contracts)
+    log = ExecutionLog(log_dir=args.log_dir, echo=False)  # the dashboard IS the echo
+    engine = ArcEngine(contracts, monitor=None, executor=SystemExecutor(), log=log,
+                       interval=args.interval)
+    import threading
+    th = threading.Thread(target=lambda: engine.run(duration=args.duration),
+                          name="arc-engine", daemon=True)
+    th.start()
+    dash = TerminalDashboard(engine)
+    if HAS_RICH:
+        print("starting ARC terminal dashboard (Ctrl+C to stop) ...")
+    dash.run(interval=0.5, duration=args.duration, screen=True)
+    th.join(timeout=3)
+    return 0
+
+
 def cmd_web(args) -> int:
     """Run the engine together with the live dashboard (for demonstrations)."""
     from .actions import SystemExecutor
@@ -216,6 +237,13 @@ def build_parser() -> argparse.ArgumentParser:
     wb.add_argument("--port", type=int, default=8777)
     wb.add_argument("--host", default="0.0.0.0")
     wb.set_defaults(func=cmd_web)
+
+    db = sub.add_parser("dashboard", help="engine + live terminal UI (best for projectors/SSH)")
+    db.add_argument("--contracts", required=True)
+    db.add_argument("--interval", type=float, default=1.0)
+    db.add_argument("--duration", type=float, default=None)
+    db.add_argument("--log-dir", default="logs")
+    db.set_defaults(func=cmd_dashboard)
 
     dm = sub.add_parser("demo", help="guided cross-platform demonstration (pure Python)")
     dm.add_argument("--contracts", default=None)

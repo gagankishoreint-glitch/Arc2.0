@@ -36,9 +36,12 @@ python3 -m arc demo                                     # guided demo - works on
 python3 -m arc selftest                                 # end-to-end smoke test (safe)
 python3 -m pytest tests/ -q                             # 36 tests
 
-# LIVE VISUAL DASHBOARD - best for showing a demo (open http://localhost:8777)
-python3 -m arc web --contracts contracts/examples/full_suite.yaml
+# LIVE VISUAL DEMO CENTERPIECE - terminal UI, works over projector/SSH
+python3 -m arc dashboard --contracts contracts/examples/full_suite.yaml
 python3 demo/generate_load.py 15   # in a second terminal - watch contracts fire
+
+# browser alternative (same engine, web UI on http://localhost:8777)
+python3 -m arc web --contracts contracts/examples/full_suite.yaml
 
 bash demo/run_demo.sh             # scripted demo (POSIX shells only)
 
@@ -107,22 +110,22 @@ Modules: `monitors.py` (observation), `contracts.py` (schema + state machine),
 `cli.py` (interface). New trigger/action types plug into two registries without
 touching the engine core.
 
-## Live dashboard (for demos)
+## Live dashboards (for demos)
 
-```bash
-python3 -m arc web --contracts contracts/examples/full_suite.yaml --port 8777
-```
+**Terminal UI (demo centerpiece)** — `python3 -m arc dashboard` renders a
+full-screen panel view: system gauges (CPU/MEM/LOAD/BAT), per-contract
+lifecycle badges with live state (IDLE → PENDING → ACTIVE → RESTORING), a
+streaming event feed (TRIGGER_ON → ACTIONS_APPLIED → TRIGGER_OFF → RESTORED),
+and a CPU sparkline history with event markers. Works over SSH, screen share,
+or a projector — no browser or ports needed. Degrades to plain text if `rich`
+is not installed.
 
-Open http://localhost:8777 — a dark-theme, offline (no CDN) dashboard with:
+**Browser UI (alternative)** — `python3 -m arc web --contracts ...` serves
+http://localhost:8777 with the same live state as inline HTML/JS/SVG (offline,
+no CDN).
 
-- live CPU / memory / battery / load gauges,
-- contract lifecycle badges (IDLE → PENDING → ACTIVE → RESTORING),
-- managed-process table with **before → after** resource state,
-- streaming event feed of every policy decision.
-
-In a second terminal run `bash demo/generate_load.sh` (or a `make -j` build) and
-watch ARC react live. Everything is inline HTML/JS/SVG — works on Linux, WSL,
-macOS and Windows with no extra dependencies.
+In a second terminal run `python3 demo/generate_load.py 15` (or a `make -j`
+build) and watch ARC react live.
 
 ## Cross-platform support
 
