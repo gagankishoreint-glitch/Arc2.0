@@ -1,0 +1,2 @@
+{"ts": 1791475380.341773, "wall": "16:03:00", "event": "ENGINE_START", "contract": "_engine", "contracts": ["idle-watch"], "interval": 1.0}
+{"ts": 1791475400.429183, "wall": "16:03:20", "event": "ENGINE_STOP", "contract": "_engine", "samples": 19, "summary": {"ENGINE_START": 1}}

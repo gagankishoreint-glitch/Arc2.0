@@ -1,0 +1,17 @@
+{
+  "0.5": {
+    "cpu_percent_mean": 2.56,
+    "cpu_percent_max": 3.0,
+    "rss_mb_mean": 18.6
+  },
+  "1.0": {
+    "cpu_percent_mean": 1.44,
+    "cpu_percent_max": 2.0,
+    "rss_mb_mean": 18.6
+  },
+  "2.0": {
+    "cpu_percent_mean": 0.75,
+    "cpu_percent_max": 1.5,
+    "rss_mb_mean": 18.6
+  }
+}

@@ -1,0 +1,63 @@
+"""Execution logging: machine-readable JSONL plus a human-readable trace.
+
+Every detected event, evaluated contract and applied/restored action is
+recorded so that ARC's decisions remain observable and auditable.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import threading
+import time
+
+
+class ExecutionLog:
+    """Thread-safe writer for ARC's execution log (JSONL + plain text)."""
+
+    def __init__(self, log_dir: str | None = None, echo: bool = True, prefix: str = "arc"):
+        self.echo = echo
+        self._lock = threading.Lock()
+        self.entries: list[dict] = []
+        self.jsonl_path = None
+        self.text_path = None
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            self.jsonl_path = os.path.join(log_dir, f"{prefix}-{stamp}.jsonl")
+            self.text_path = os.path.join(log_dir, f"{prefix}-{stamp}.log")
+
+    def record(self, event_kind: str, contract: str, ts: float | None = None, **detail):
+        entry = {
+            "ts": round(ts if ts is not None else time.time(), 6),
+            "wall": time.strftime("%H:%M:%S", time.localtime(ts if ts is not None else time.time())),
+            "event": event_kind,
+            "contract": contract,
+            **detail,
+        }
+        with self._lock:
+            self.entries.append(entry)
+            if self.jsonl_path:
+                with open(self.jsonl_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(entry, default=str) + "\n")
+            if self.text_path:
+                with open(self.text_path, "a", encoding="utf-8") as f:
+                    f.write(self._format(entry) + "\n")
+        if self.echo:
+            print(self._format(entry), flush=True)
+        return entry
+
+    @staticmethod
+    def _format(entry: dict) -> str:
+        detail = {k: v for k, v in entry.items() if k not in ("ts", "wall", "event", "contract")}
+        suffix = ""
+        if detail:
+            compact = "; ".join(f"{k}={v}" for k, v in detail.items())
+            suffix = " | " + compact
+        return f"[{entry['wall']}] {entry['event']:<15} {entry['contract']}{suffix}"
+
+    def summary(self) -> dict:
+        counts: dict[str, int] = {}
+        for e in self.entries:
+            counts[e["event"]] = counts.get(e["event"], 0) + 1
+        return counts

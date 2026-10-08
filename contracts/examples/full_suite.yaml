@@ -1,0 +1,88 @@
+# ARC example contracts
+# Trigger -> Actions -> Restoration. Edit freely; `arc validate` checks schema.
+
+contracts:
+  - name: compile-boost
+    description: >
+      When a compiler process appears, raise its scheduling priority and
+      deprioritise known background apps; restore everything when the
+      compiler exits.
+    enabled: true
+    trigger:
+      type: process_appears
+      match: "gcc|g\\+\\+|cc1plus|cc1|clang|make|ninja"
+      debounce_sec: 1.0
+    actions:
+      - type: set_nice
+        target: {match: "gcc|g\\+\\+|cc1plus|cc1|clang|make|ninja", limit: 32}
+        nice: -5                 # clamped automatically if unprivileged
+      - type: set_nice
+        target: {match: "chromium|firefox|chrome|spotify", limit: 16}
+        nice: 10
+        optional: true
+    restore:
+      mode: on_trigger_clear
+    cooldown_sec: 5.0
+
+  - name: cpu-hot-guard
+    description: >
+      When system CPU utilisation stays above 85% for 5 seconds, cap the
+      heaviest CPU consumer and log the incident; restore when pressure
+      drops below 85% again.
+    enabled: true
+    trigger:
+      type: metric_threshold
+      metric: cpu_percent
+      op: ">="
+      threshold: 85
+      for_sec: 5.0
+    actions:
+      - type: set_nice
+        target: {match: ".*", limit: 1}   # single heaviest process is resolved at apply time
+        nice: 19
+      - type: log
+        message: "CPU pressure > 85% - heaviest consumer deprioritised"
+    restore:
+      mode: on_trigger_clear
+    cooldown_sec: 10.0
+
+  - name: battery-saver
+    description: >
+      On battery below 25%, suspend power-hungry non-essential workloads
+      and restore them once the machine is plugged in again.
+    enabled: true
+    trigger:
+      type: battery_below
+      threshold: 25
+    actions:
+      - type: suspend
+        target: {match: "chromium|firefox|chrome|spotify", limit: 8}
+      - type: log
+        message: "battery < 25% on battery power - background workloads suspended"
+    restore:
+      mode: on_trigger_clear
+    cooldown_sec: 30.0
+
+  - name: memory-guard
+    description: >
+      If memory usage stays above 80% for 5 seconds, put the biggest memory
+      consumer into a soft CPU-limited cgroup (Linux, root) and raise its
+      nice value; restore when memory pressure clears.
+    enabled: true
+    trigger:
+      type: metric_threshold
+      metric: mem_percent
+      op: ">="
+      threshold: 80
+      for_sec: 5.0
+    actions:
+      - type: set_nice
+        target: {match: ".*", limit: 1}
+        nice: 10
+      - type: cgroup_limit
+        target: {match: ".*", limit: 1}
+        group: arc_managed
+        cpu_quota: 50000          # 50% of one CPU
+    restore:
+      mode: on_trigger_clear
+    cooldown_sec: 15.0

@@ -1,0 +1,2 @@
+[16:03:00] ENGINE_START    _engine | contracts=['idle-watch']; interval=1.0
+[16:03:20] ENGINE_STOP     _engine | samples=19; summary={'ENGINE_START': 1}

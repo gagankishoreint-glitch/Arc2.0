@@ -1,0 +1,6 @@
+{"ts": 1791475464.154559, "wall": "16:04:24", "event": "ENGINE_START", "contract": "_engine", "contracts": ["compile-boost-live"], "interval": 0.2}
+{"ts": 1791475465.928279, "wall": "16:04:25", "event": "TRIGGER_ON", "contract": "compile-boost-live", "trigger": "process_appears", "desc": ""}
+{"ts": 1791475465.960206, "wall": "16:04:25", "event": "ACTIONS_APPLIED", "contract": "compile-boost-live", "action": "set_nice", "targets": [{"action": "set_nice", "pid": 2261, "prev": {"nice": 0}, "new": {"nice": -5}, "detail": ""}], "note": ""}
+{"ts": 1791475465.961539, "wall": "16:04:25", "event": "ACTIONS_APPLIED", "contract": "compile-boost-live", "action": "set_nice", "targets": [{"action": "set_nice", "pid": 2258, "prev": {"nice": 0}, "new": {"nice": 10}, "detail": ""}], "note": ""}
+{"ts": 1791475470.917067, "wall": "16:04:30", "event": "RESTORED", "contract": "compile-boost-live", "restored": 2, "of": 2}
+{"ts": 1791475478.190782, "wall": "16:04:38", "event": "ENGINE_STOP", "contract": "_engine", "samples": 65, "summary": {"ENGINE_START": 1, "TRIGGER_ON": 1, "ACTIONS_APPLIED": 2, "RESTORED": 1}}

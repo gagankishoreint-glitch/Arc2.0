@@ -1,0 +1,69 @@
+{
+  "mem_percent_before": 25.4,
+  "mem_percent_peak": 70.0,
+  "triggered": true,
+  "hog_nice_during": 10,
+  "restored": true,
+  "timeline": [
+    {
+      "ts": 1791475950.170662,
+      "wall": "16:12:30",
+      "event": "ENGINE_START",
+      "contract": "_engine",
+      "contracts": [
+        "memory-guard-live"
+      ],
+      "interval": 0.5
+    },
+    {
+      "ts": 1791475954.31005,
+      "wall": "16:12:34",
+      "event": "TRIGGER_ON",
+      "contract": "memory-guard-live",
+      "trigger": "metric_threshold",
+      "desc": ""
+    },
+    {
+      "ts": 1791475954.383692,
+      "wall": "16:12:34",
+      "event": "ACTIONS_APPLIED",
+      "contract": "memory-guard-live",
+      "action": "set_nice",
+      "targets": [
+        {
+          "action": "set_nice",
+          "pid": 2639,
+          "prev": {
+            "nice": 10
+          },
+          "new": {
+            "nice": 10
+          },
+          "detail": ""
+        }
+      ],
+      "note": ""
+    },
+    {
+      "ts": 1791475964.710866,
+      "wall": "16:12:44",
+      "event": "RESTORED",
+      "contract": "memory-guard-live",
+      "restored": 1,
+      "of": 1
+    },
+    {
+      "ts": 1791475978.240482,
+      "wall": "16:12:58",
+      "event": "ENGINE_STOP",
+      "contract": "_engine",
+      "samples": 55,
+      "summary": {
+        "ENGINE_START": 1,
+        "TRIGGER_ON": 1,
+        "ACTIONS_APPLIED": 1,
+        "RESTORED": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{"ts": 1791475478.214303, "wall": "16:04:38", "event": "ENGINE_START", "contract": "_engine", "contracts": ["memory-guard-live"], "interval": 0.5}
+{"ts": 1791475481.866627, "wall": "16:04:41", "event": "TRIGGER_ON", "contract": "memory-guard-live", "trigger": "metric_threshold", "desc": ""}
+{"ts": 1791475481.923643, "wall": "16:04:41", "event": "ACTIONS_APPLIED", "contract": "memory-guard-live", "action": "set_nice", "targets": [{"action": "set_nice", "pid": 2264, "prev": {"nice": 0}, "new": {"nice": 10}, "detail": ""}], "note": ""}
+{"ts": 1791475492.728679, "wall": "16:04:52", "event": "RESTORED", "contract": "memory-guard-live", "restored": 1, "of": 1}
+{"ts": 1791475506.277336, "wall": "16:05:06", "event": "ENGINE_STOP", "contract": "_engine", "samples": 55, "summary": {"ENGINE_START": 1, "TRIGGER_ON": 1, "ACTIONS_APPLIED": 1, "RESTORED": 1}}

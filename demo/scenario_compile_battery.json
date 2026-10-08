@@ -1,0 +1,16 @@
+{
+  "start_procs": [
+    {"pid": 7001, "name": "firefox", "cmdline": "firefox --new-window", "cpu_percent": 12.0, "mem_percent": 4.0},
+    {"pid": 7002, "name": "spotify", "cmdline": "spotify", "cpu_percent": 3.0, "mem_percent": 2.0},
+    {"pid": 7003, "name": "idle-daemon", "cmdline": "idle-daemon --quiet", "cpu_percent": 0.5, "mem_percent": 0.2}
+  ],
+  "steps": [
+    {"t": 2.0, "op": "metric", "cpu_percent": 25.0, "mem_percent": 42.0},
+    {"t": 3.0, "op": "proc_add", "pid": 7100, "name": "cc1plus", "cmdline": "cc1plus -O2 build/main.c", "cpu_percent": 96.0, "mem_percent": 8.0},
+    {"t": 5.0, "op": "metric", "cpu_percent": 88.0},
+    {"t": 14.0, "op": "proc_del", "pid": 7100},
+    {"t": 15.0, "op": "metric", "cpu_percent": 22.0},
+    {"t": 17.0, "op": "battery", "percent": 18.0, "plugged": false},
+    {"t": 30.0, "op": "battery", "percent": 82.0, "plugged": true}
+  ]
+}

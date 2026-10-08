@@ -1,0 +1,12 @@
+[16:14:53] ENGINE_START    _engine | contracts=['compile-boost', 'cpu-hot-guard', 'battery-saver', 'memory-guard']; interval=1.0
+[16:14:55] TRIGGER_ON      compile-boost | trigger=process_appears; desc=When a compiler process appears, raise its scheduling priority and deprioritise known background apps; restore everything when the compiler exits.
+
+[16:14:55] ACTIONS_APPLIED compile-boost | action=set_nice; targets=[{'action': 'set_nice', 'pid': 7100, 'prev': {'nice': 0, 'status': 'running'}, 'new': {'nice': -5}, 'detail': 'dry-run'}]; note=
+[16:14:55] ACTIONS_APPLIED compile-boost | action=set_nice; targets=[{'action': 'set_nice', 'pid': 7001, 'prev': {'nice': 0, 'status': 'running'}, 'new': {'nice': 10, 'optional': True}, 'detail': 'dry-run'}, {'action': 'set_nice', 'pid': 7002, 'prev': {'nice': 0, 'status': 'running'}, 'new': {'nice': 10, 'optional': True}, 'detail': 'dry-run'}]; note=
+[16:14:59] RESTORED        compile-boost | restored=3; of=3
+[16:15:00] TRIGGER_ON      battery-saver | trigger=battery_below; desc=On battery below 25%, suspend power-hungry non-essential workloads and restore them once the machine is plugged in again.
+
+[16:15:00] ACTIONS_APPLIED battery-saver | action=suspend; targets=[{'action': 'suspend', 'pid': 7001, 'prev': {'nice': 0, 'status': 'running'}, 'new': {}, 'detail': 'dry-run'}, {'action': 'suspend', 'pid': 7002, 'prev': {'nice': 0, 'status': 'running'}, 'new': {}, 'detail': 'dry-run'}]; note=
+[16:15:00] ACTION_SKIPPED  battery-saver | action=log; reason=no process matched None
+[16:15:04] RESTORED        battery-saver | restored=2; of=2
+[16:15:05] ENGINE_STOP     _engine | samples=13; summary={'ENGINE_START': 1, 'TRIGGER_ON': 2, 'ACTIONS_APPLIED': 3, 'RESTORED': 2, 'ACTION_SKIPPED': 1}

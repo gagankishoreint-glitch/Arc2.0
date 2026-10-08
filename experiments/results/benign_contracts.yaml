@@ -1,0 +1,4 @@
+contracts:
+  - name: idle-watch
+    trigger: {type: process_appears, match: never-matches-this-xyz}
+    actions: [{type: log, message: noop}]

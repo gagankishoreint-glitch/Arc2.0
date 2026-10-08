@@ -1,0 +1,6 @@
+[16:04:24] ENGINE_START    _engine | contracts=['compile-boost-live']; interval=0.2
+[16:04:25] TRIGGER_ON      compile-boost-live | trigger=process_appears; desc=
+[16:04:25] ACTIONS_APPLIED compile-boost-live | action=set_nice; targets=[{'action': 'set_nice', 'pid': 2261, 'prev': {'nice': 0}, 'new': {'nice': -5}, 'detail': ''}]; note=
+[16:04:25] ACTIONS_APPLIED compile-boost-live | action=set_nice; targets=[{'action': 'set_nice', 'pid': 2258, 'prev': {'nice': 0}, 'new': {'nice': 10}, 'detail': ''}]; note=
+[16:04:30] RESTORED        compile-boost-live | restored=2; of=2
+[16:04:38] ENGINE_STOP     _engine | samples=65; summary={'ENGINE_START': 1, 'TRIGGER_ON': 1, 'ACTIONS_APPLIED': 2, 'RESTORED': 1}

@@ -1,0 +1,9 @@
+{
+  "window_s": 8.0,
+  "worker_cpu_share_percent": {
+    "all-nice-0": 67.1,
+    "worker--5-hogs-0": 99.6,
+    "worker-0-hogs-19": 99.6,
+    "worker-19-hogs-0": 13.9
+  }
+}
