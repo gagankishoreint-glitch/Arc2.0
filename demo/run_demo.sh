@@ -24,3 +24,7 @@ fi
 echo
 echo "== 4. built-in selftest =="
 python3 -m arc selftest
+
+echo
+echo "== tip: for a LIVE visual demo run: python3 -m arc web --contracts contracts/examples/full_suite.yaml =="
+echo "        then 'bash demo/generate_load.sh' in another terminal and watch the dashboard."

@@ -69,6 +69,31 @@ def make_architecture(path):
     plt.close(fig)
 
 
+def make_kpi_figure(path, data):
+    fig, ax = plt.subplots(figsize=(10, 4.2))
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 4.2)
+    ax.axis("off")
+    kpis = [
+        (f"{data['e1']['0.2s|debounce=0.0']['mean_ms']} ms", "trigger to enforcement\n(0.2 s sampling)", "#2b6cb0"),
+        (f"{data['e2']['1.0']['cpu_percent_mean']}%", "CPU overhead\nat 1 Hz sampling", "#2f855a"),
+        (f"{data['e3']['rate_percent']}%", "exact restorations\n(40/40 trials)", "#805ad5"),
+        ("67% -> 99.6%", "CPU share of protected\nworkload under contention", "#b7791f"),
+        ("4", "platforms: Linux, WSL,\nmacOS, Windows", "#c53030"),
+        ("27", "automated tests\n(100% passing)", "#2c7a7b"),
+    ]
+    for i, (val, label, color) in enumerate(kpis):
+        x = 0.2 + (i % 3) * 3.25
+        y = 2.25 if i < 3 else 0.15
+        ax.add_patch(FancyBboxPatch((x, y), 3.0, 1.85, boxstyle="round,pad=0.03",
+                                    fc="#f7fafc", ec=color, lw=2.2))
+        ax.text(x + 1.5, y + 1.22, val, ha="center", fontsize=26, fontweight="bold", color=color)
+        ax.text(x + 1.5, y + 0.52, label, ha="center", fontsize=11, color="#2d3748")
+    fig.tight_layout()
+    fig.savefig(path, dpi=170)
+    plt.close(fig)
+
+
 def make_state_machine(path):
     fig, ax = plt.subplots(figsize=(8.6, 3.2))
     ax.set_xlim(0, 10)
@@ -332,7 +357,10 @@ def build_report(data):
         "engine.py - sampler thread, event queue, coordinator, debounce and cooldown timing, and "
         "shutdown restoration.",
         "logger.py and cli.py - JSONL plus human-readable execution logs, and a command-line "
-        "interface (validate, run, simulate, selftest, status).",
+        "interface (validate, run, simulate, selftest, status, web).",
+        "web.py - a zero-dependency live dashboard (arc web) showing CPU/memory/battery gauges, "
+        "contract lifecycle states, managed processes with before/after resource state, and a "
+        "streaming event feed, used for real-time demonstration of policy decisions.",
     ])
     p("Step-by-step workflow:")
     bullets([
@@ -694,14 +722,15 @@ def build_ppt(data):
     ], size=18)
 
     # 10 demo
-    s = slide("Demo Walkthrough", "compile-boost contract, live lifecycle")
+    s = slide("Demo Walkthrough", "compile-boost contract + live web dashboard")
     bullets(s, [
-        "1. gcc/make appears → debounce 1 s → compiler boosted (nice −5), background apps deprioritized",
-        "2. Build finishes → trigger clears → original nice/affinity restored exactly",
-        "3. Battery drops below 25% → background workloads suspended; plugged in → resumed",
-        "4. Execution log shows every decision: trigger, action with before/after state, restore",
+        "1. python3 -m arc web  → live dashboard: gauges, contract states, event feed",
+        "2. gcc/make appears → debounce 1 s → compiler boosted (nice −5), background deprioritized",
+        "3. Build finishes → trigger clears → original nice/affinity restored exactly",
+        "4. Battery drops below 25% → background workloads suspended; plugged in → resumed",
+        "5. bash demo/generate_load.sh → CPU pressure → cpu-hot-guard fires on screen",
         ("Safe dry-run demo runs on any OS: bash demo/run_demo.sh", 1),
-    ], size=18)
+    ], size=17)
 
     # 11 results latency+overhead
     s = slide("Results I — Latency & Overhead", "E1 + E2: tunable response, tiny footprint")
@@ -754,13 +783,17 @@ def build_ppt(data):
     ], size=18)
 
     # 15 conclusion
+    s = slide("Results at a Glance")
+    add_pic(s, os.path.join(DOCS, "fig_kpi.png"), 1.15, 1.6, 11.0)
+
     s = slide("Conclusion & Future Work")
     bullets(s, [
         "ARC = monitoring + event detection + contracts + dynamic enforcement + restoration in one layer",
         "Demonstrates OS concepts in a real system: scheduling, affinity, signals, cgroups, concurrency, protection",
         "Delivers full Review-3 scope: implementation, experimentation, performance evaluation",
+        "Live web dashboard (arc web) for real-time demonstration of policy decisions",
         "Future: eBPF/proc-connector events, I/O + memory.high controls, contract conflict resolution, "
-        "TUI/GUI manager, systemd packaging, publication extension",
+        "full management GUI, systemd packaging, publication extension",
     ], size=18)
 
     # 16 references
@@ -805,7 +838,8 @@ def build_ppt(data):
 if __name__ == "__main__":
     make_architecture(os.path.join(DOCS, "fig_architecture.png"))
     make_state_machine(os.path.join(DOCS, "fig_state_machine.png"))
-    print("saved diagrams")
     data = load_results()
+    make_kpi_figure(os.path.join(DOCS, "fig_kpi.png"), data)
+    print("saved diagrams")
     build_report(data)
     build_ppt(data)

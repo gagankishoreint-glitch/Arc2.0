@@ -35,7 +35,12 @@ class RealMonitor:
             return BatteryInfo(None, None)
         if b is None:
             return BatteryInfo(None, None)
-        return BatteryInfo(b.percent, b.power_plugged, b.secsleft if b.secsleft != psutil._common.sbattery(-1) else None)
+        # psutil reports negative sentinel values for "unknown"/"unlimited"
+        # time remaining (POWER_TIME_UNKNOWN / POWER_TIME_UNLIMITED).
+        secs = getattr(b, "secsleft", None)
+        if secs is not None and secs < 0:
+            secs = None
+        return BatteryInfo(b.percent, b.power_plugged, secs)
 
     def sample(self) -> SystemSample:
         cpu = psutil.cpu_percent(interval=None)

@@ -74,6 +74,27 @@ def cmd_status(args) -> int:
     return 0
 
 
+def cmd_web(args) -> int:
+    """Run the engine together with the live dashboard (for demonstrations)."""
+    from .actions import SystemExecutor
+    from .web import serve
+
+    contracts = load_contracts(args.contracts)
+    log = ExecutionLog(log_dir=args.log_dir, echo=True)
+    engine = ArcEngine(contracts, monitor=None, executor=SystemExecutor(), log=log,
+                       interval=args.interval)
+    httpd = serve(engine, host=args.host, port=args.port)
+    print(f"\n  ARC live dashboard:  http://localhost:{args.port}")
+    print(f"  (open in a browser; generate load in another terminal to watch contracts fire)\n")
+    try:
+        engine.run(duration=args.duration)
+    except KeyboardInterrupt:
+        print("\ninterrupted; restoring any applied policies ...")
+    finally:
+        httpd.shutdown()
+    return 0
+
+
 def cmd_selftest(args) -> int:
     """Deterministic end-to-end check using a synthetic scenario + dry run."""
     scenario = {
@@ -132,6 +153,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     st = sub.add_parser("status", help="platform capability report")
     st.set_defaults(func=cmd_status)
+
+    wb = sub.add_parser("web", help="run engine + live dashboard for demos")
+    wb.add_argument("--contracts", required=True)
+    wb.add_argument("--interval", type=float, default=1.0)
+    wb.add_argument("--duration", type=float, default=None)
+    wb.add_argument("--log-dir", default="logs")
+    wb.add_argument("--port", type=int, default=8777)
+    wb.add_argument("--host", default="0.0.0.0")
+    wb.set_defaults(func=cmd_web)
 
     se = sub.add_parser("selftest", help="built-in end-to-end smoke test")
     se.set_defaults(func=cmd_selftest)

@@ -18,16 +18,30 @@ changes, you declare *intent* once and ARC follows the workload's lifecycle.
 
 ## Quick start
 
-```bash
-pip install -r requirements.txt
+**macOS / any PEP 668 Python (Homebrew, etc.) — use a virtual environment:**
 
+```bash
+cd Arc2.0
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt pytest
+```
+
+Linux: `pip install -r requirements.txt` works directly.
+
+```bash
 python3 -m arc status                                   # platform capability report
 python3 -m arc validate contracts/examples/full_suite.yaml
 python3 -m arc selftest                                 # end-to-end smoke test (safe)
+python3 -m pytest tests/ -q                             # 27 tests
 
-bash demo/run_demo.sh                                   # cross-platform demo (dry-run)
+# LIVE VISUAL DASHBOARD - best for showing a demo (open http://localhost:8777)
+python3 -m arc web --contracts contracts/examples/full_suite.yaml
+bash demo/generate_load.sh 20     # in a second terminal - watch contracts fire
 
-# live enforcement (Linux/WSL; use sudo for the full privilege tier)
+bash demo/run_demo.sh             # scripted cross-platform demo (dry-run)
+
+# live enforcement (Linux/WSL/macOS; use sudo for the full privilege tier)
 sudo python3 -m arc run --contracts contracts/examples/full_suite.yaml --interval 1
 
 # deterministic scenario replay on any OS (add --real-actions to really enforce)
@@ -35,7 +49,7 @@ python3 -m arc simulate --contracts contracts/examples/full_suite.yaml \
          --scenario demo/scenario_compile_battery.json --speed 3
 ```
 
-Run the tests: `python3 -m pytest tests/` (21 tests).
+Run the tests: `python3 -m pytest tests/` (27 tests).
 Re-run the experiments: `sudo python3 experiments/run_experiments.py`.
 
 ---
@@ -91,6 +105,23 @@ Modules: `monitors.py` (observation), `contracts.py` (schema + state machine),
 `cli.py` (interface). New trigger/action types plug into two registries without
 touching the engine core.
 
+## Live dashboard (for demos)
+
+```bash
+python3 -m arc web --contracts contracts/examples/full_suite.yaml --port 8777
+```
+
+Open http://localhost:8777 — a dark-theme, offline (no CDN) dashboard with:
+
+- live CPU / memory / battery / load gauges,
+- contract lifecycle badges (IDLE → PENDING → ACTIVE → RESTORING),
+- managed-process table with **before → after** resource state,
+- streaming event feed of every policy decision.
+
+In a second terminal run `bash demo/generate_load.sh` (or a `make -j` build) and
+watch ARC react live. Everything is inline HTML/JS/SVG — works on Linux, WSL,
+macOS and Windows with no extra dependencies.
+
 ## Cross-platform support
 
 | Capability | Linux | WSL | macOS | Windows |
@@ -131,10 +162,10 @@ contract lifecycle, like other rule-based daemons (ananicy, systemd-oomd).
 ```
 arc/                  engine package (monitor, contracts, actions, engine, logger, cli)
 contracts/examples/   sample YAML contracts
-tests/                21 unit + integration tests (pytest)
-demo/                 cross-platform scenario demo
+tests/                27 unit + integration tests (pytest)
+demo/                 cross-platform scenario demo + CPU load generator
 experiments/          E1-E6 experiment suite + results/
-docs/                 final report (docx) + presentation (pptx)
+docs/                 final report (docx) + presentation (pptx) + figures
 AUDIT.md              audit trail & review-3 checklist
 push_to_github.sh     one-shot publish script
 ```
